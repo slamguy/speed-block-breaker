@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>爆速ブロック崩し・30倍速アイテム版</title>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #222; font-family: sans-serif; overflow: hidden; }
+        #game-container { position: relative; }
+        canvas { border: 4px solid #fff; background: #000; display: block; width: 800px; height: 600px; }
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 800px; height: 600px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: white; background: rgba(0,0,0,0.8);
+        }
+        button { padding: 15px 30px; font-size: 24px; cursor: pointer; background: #ff4757; color: white; border: none; border-radius: 5px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="titleScreen" class="overlay">
+        <h1>ULTRA FAST BREAKOUT</h1>
+        <p>【警告】速度30倍につき、まばたき厳禁</p>
+        <button onclick="startGame()">START</button>
+    </div>
+    <div id="gameOverScreen" class="overlay hidden">
+        <h1>GAME OVER</h1>
+        <button onclick="startGame()">RETRY</button>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let gameActive = false;
+let x, y, dx, dy, paddleX, bricks, paddleWidth;
+let items = [];
+
+const ballRadius = 10;
+const paddleHeight = 15;
+const originalPaddleWidth = 120;
+const itemSize = 20; // 拾いやすくするため少し大きく
+const itemSpeed = 4;
+
+const brickRowCount = 5;
+const brickColumnCount = 8;
+const brickWidth = 80;
+const brickHeight = 30;
+const brickPadding = 15;
+const brickOffsetTop = 50;
+const brickOffsetLeft = 35;
+
+let rightPressed = false;
+let leftPressed = false;
+
+document.addEventListener("keydown", (e) => {
+    if(e.key === "Right" || e.key === "ArrowRight") rightPressed = true;
+    else if(e.key === "Left" || e.key === "ArrowLeft") leftPressed = true;
+});
+document.addEventListener("keyup", (e) => {
+    if(e.key === "Right" || e.key === "ArrowRight") rightPressed = false;
+    else if(e.key === "Left" || e.key === "ArrowLeft") leftPressed = false;
+});
+
+function initGame() {
+    x = canvas.width / 2;
+    y = canvas.height - 50;
+    
+    // --- 30倍速設定 ---
+    dx = 60; 
+    dy = -60;
+    
+    paddleWidth = originalPaddleWidth;
+    paddleX = (canvas.width - paddleWidth) / 2;
+    items = [];
+    
+    bricks = [];
+    for (let c = 0; c < brickColumnCount; c++) {
+        bricks[c] = [];
+        for (let r = 0; r < brickRowCount; r++) {
+            bricks[c][r] = { x: 0, y: 0, status: 1 };
+        }
+    }
+}
+
+function startGame() {
+    initGame();
+    gameActive = true;
+    document.getElementById("titleScreen").classList.add("hidden");
+    document.getElementById("gameOverScreen").classList.add("hidden");
+    draw();
+}
+
+function collisionDetection() {
+    for (let c = 0; c < brickColumnCount; c++) {
+        for (let r = 0; r < brickRowCount; r++) {
+            const b = bricks[c][r];
+            if (b.status === 1) {
+                if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                    dy = -dy;
+                    b.status = 0;
+                    if (Math.random() < 0.4) { // 確率を少しアップ
+                        items.push({ x: b.x + brickWidth / 2, y: b.y, status: 1 });
+                    }
+                }
+            }
+        }
+    }
+}
+
+function upgradePaddle() {
+    paddleWidth = 300; // アイテムを拾ったらかなり大きく
+    setTimeout(() => { paddleWidth = originalPaddleWidth; }, 7000);
+}
+
+function draw() {
+    if (!gameActive) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (let c = 0; c < brickColumnCount; c++) {
+        for (let r = 0; r < brickRowCount; r++) {
+            if (bricks[c][r].status === 1) {
+                const brickX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
+                const brickY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
+                bricks[c][r].x = brickX;
+                bricks[c][r].y = brickY;
+                ctx.beginPath();
+                ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                ctx.fillStyle = "#ffa502";
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+    }
+
+    items.forEach((item) => {
+        if (item.status === 1) {
+            item.y += itemSpeed;
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, itemSize / 2, 0, Math.PI * 2);
+            ctx.fillStyle = "#ff4757";
+            ctx.fill();
+            ctx.closePath();
+            if (item.y + itemSize / 2 > canvas.height - paddleHeight &&
+                item.x > paddleX && item.x < paddleX + paddleWidth) {
+                item.status = 0;
+                upgradePaddle();
+            }
+        }
+    });
+
+    ctx.beginPath();
+    ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#fff";
+    ctx.fill();
+    ctx.closePath();
+
+    ctx.fillStyle = "#2ed573";
+    ctx.fillRect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+
+    collisionDetection();
+
+    if (x + dx > canvas.width - ballRadius || x < ballRadius) dx = -dx;
+    if (y + dy < ballRadius) dy = -dy;
+    else if (y + dy > canvas.height - ballRadius) {
+        if (x > paddleX && x < paddleX + paddleWidth) {
+            dy = -dy;
+        } else {
+            gameActive = false;
+            document.getElementById("gameOverScreen").classList.remove("hidden");
+            return;
+        }
+    }
+
+    // --- パドルの移動速度も爆速化 ---
+    if (rightPressed && paddleX < canvas.width - paddleWidth) paddleX += 80;
+    else if (leftPressed && paddleX > 0) paddleX -= 80;
+
+    x += dx;
+    y += dy;
+    requestAnimationFrame(draw);
+}
+</script>
+</body>
+</html>
